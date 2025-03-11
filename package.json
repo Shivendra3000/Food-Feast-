@@ -1,0 +1,20 @@
+{
+  "name": "fooddelivery",
+  "version": "1.0.0",
+  "description": "Food Feast : A Food Delivery Website",
+  "main": "index.js",
+  "scripts": {
+    "build": "react-scripts build",
+    "start": "concurrently \"npm run start:frontend\" \"npm run start:backend\" \"npm run start:admin\"",
+    "start:frontend": "cd Front-End && npm run dev",
+    "start:backend": "cd Back-End && npm run server",
+    "start:admin": "cd Admin && npm run dev"
+  },
+  "dependencies": {
+    "concurrently": "^7.6.0",
+    "react-scripts": "^5.0.1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
