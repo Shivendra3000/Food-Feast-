@@ -13,26 +13,41 @@ const placeOrder = async (req, res) => {
     const frontend_url = "http://localhost:5173";
 
     try {
-        if (!req.body.userId || !req.body.items || !req.body.amount || !req.body.address) {
+        if (!req.body.userId || !req.body.amount || !req.body.address) {
             return res.status(400).json({ success: false, message: "Missing required fields" });
         }
 
+        // Fetch user data to get the cart data
+        const userData = await userModel.findById(req.body.userId);
+        if (!userData || !userData.cartData || Object.keys(userData.cartData).length === 0) {
+            return res.status(400).json({ success: false, message: "Cart is empty" });
+        }
+
+        // Convert cartData object into an array of items
+        const cartItems = Object.entries(userData.cartData).map(([itemId, quantity]) => ({
+            itemId,
+            quantity
+        }));
+
         const newOrder = new orderModel({
             userId: req.body.userId,
-            items: req.body.items,
+            items: cartItems,  // Store items from cartData
             amount: req.body.amount,
             address: req.body.address
         });
+
         await newOrder.save();
+
+        // Clear user's cart after order placement
         await userModel.findByIdAndUpdate(req.body.userId, { cartData: {} });
 
-        const line_items = req.body.items.map((item) => ({
+        const line_items = cartItems.map((item) => ({
             price_data: {
                 currency: "inr",
                 product_data: {
-                    name: item.name
+                    name: `Product ID: ${item.itemId}`
                 },
-                unit_amount: item.price * 100 // Convert to paise
+                unit_amount: req.body.amount * 100 // Assuming the price is coming from frontend
             },
             quantity: item.quantity
         }));
@@ -43,7 +58,7 @@ const placeOrder = async (req, res) => {
                 product_data: {
                     name: "Delivery Charges"
                 },
-                unit_amount: 20*100
+                unit_amount: 20 * 100
             },
             quantity: 1
         });
@@ -56,6 +71,7 @@ const placeOrder = async (req, res) => {
             cancel_url: `${frontend_url}/verify?success=false&orderId=${newOrder._id}`,
             customer_email: req.body.email || undefined
         });
+
         res.json({ success: true, session_url: session.url });
 
     } catch (error) {
@@ -71,14 +87,16 @@ const verifyOrder = async (req,res) => {
             return res.status(400).json({ success: false, message: "Invalid order ID" });
         }
         
-        if (success === "true") {
-            await orderModel.findByIdAndUpdate(orderId,{payment:true});
-            res.json({success:true,message:"Paid"})
-        }
-        else{
-            await orderModel.findByIdAndDelete(orderId);
-            res.json({success:false,message:"Not Paid"})
-        }
+        const isSuccess = success === "true";
+        if (isSuccess) {
+        await orderModel.findByIdAndUpdate(orderId, { payment: true });
+        await userModel.findByIdAndUpdate(req.body.userId, { cartData: {} }); // Clear cart only on successful payment
+        res.json({ success: true, message: "Paid" });
+        } else {
+    await orderModel.findByIdAndDelete(orderId);
+    res.json({ success: false, message: "Not Paid" });
+}
+
     } catch (error) {
        console.error("Order Verification Error:", error);
        res.status(500).json({ success: false, message: error.message });
